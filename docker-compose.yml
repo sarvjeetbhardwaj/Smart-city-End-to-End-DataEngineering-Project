@@ -1,20 +1,19 @@
 version: '3'
 
 x-spark-common: &spark-common
-  image: bitnami/spark:latest
+  image: bitnami/spark:3.5
   volumes:
       - ./jobs:/opt/bitnami/spark/jobs
   command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
   depends_on:
     - spark-master
   environment:
-    SPARK_MODE: Worker
+    SPARK_MODE: worker
     SPARK_WORKER_CORES: 2
     SPARK_WORKER_MEMORY: 1g
     SPARK_MASTER_URL: spark://spark-master:7077
   networks:
     - datamasterylab
-
 
 services:
   zookeeper:
@@ -33,6 +32,7 @@ services:
       retries: 5
     networks: 
       - datamasterylab
+
   broker:
     image: confluentinc/cp-server:7.4.0
     hostname: broker
@@ -69,16 +69,24 @@ services:
       retries: 5
     networks:
       - datamasterylab
+
   spark-master:
-    image: bitnami/spark:latest
-    volumes:
-      - ./jobs:/opt/bitnami/spark/jobs
-    command: bin/spark-class org.apache.spark.deploy.master.MASTER
+    image: docker.io/bitnami/spark:3.5
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
     ports:
       - "9090:8080"
       - "7077:7077"
+    volumes:
+      - ./jobs:/opt/bitnami/spark/jobs
     networks:
       - datamasterylab
+
   spark-worker-1:
     <<: *spark-common
   spark-worker-2:

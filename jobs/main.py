@@ -25,6 +25,8 @@ EMERGENCY_TOPIC = os.getenv('EMERGENCY_TOPIC', 'emergency_data')
 start_time = datetime.now()
 start_location = LONDON_COORDINATES.copy()
 
+random.seed(45)
+
 def get_next_time():
     global start_time
     start_time += timedelta(seconds=random.randint(30, 60))

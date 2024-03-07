@@ -6,13 +6,14 @@ from pyspark.sql.functions import from_json, col
 def main():
     spark = SparkSession.builder.appName('SmartCityStreaming')\
             .config('spark.jars.packages',
-                    'org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1',
-                    'org.apache.hadoop:hadoop-aws:3.3.1',
+                    'org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.0,'
+                    'org.apache.hadoop:hadoop-aws:3.3.1,'
                     'com.amazonaws:aws-java-sdk:1.11.469')\
             .config('spark.hadoop.fs.s3a.impl','org.apache.hadoop.fs.s3a.S3AFileSystem')\
             .config('spark.hadoop.fs.s3a.access.key', configuration.get('AWS_ACCESS_KEY'))\
             .config('spark.hadoop.fs.s3a.secret.key', configuration.get('AWS_SECRET_KEY'))\
-            .config('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.impl.SimpleAWSCredentialsProvider')\
+            .config('spark.hadoop.fs.s3a.aws.credentials.provider', 
+                    'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider')\
             .getOrCreate()
     
     ## Adjust the loglev to minimize the output
@@ -85,11 +86,15 @@ def main():
                 option('subscribe', topic).
                 option('startingOffsets', 'earliest').
                 load().
-                selectExpr('CAST(values AS STRING').
+                selectExpr('CAST(value AS STRING)').
                 select(from_json(col('value'),schema).alias('data')).
                 select('data.*').
                 withWatermark('timestamp', '2 minutes')
                 )
+
+    def streamWriter(input, checkpointFolder, output):
+        return (input.writeStream.format('parquet').option('checkpointLocation', checkpointFolder)\
+                .option('path', output).outputMode('append').start())
 
     vehicleDF = read_kafka_topic(topic='vehicle_data', schema=vehicleSchema).alias('vehicle')
     gpsDF = read_kafka_topic(topic='gps_data', schema=gpsSchema).alias('gps')
@@ -97,6 +102,22 @@ def main():
     weatherDF = read_kafka_topic(topic='weather_data', schema=weatherSchema).alias('weather')
     emergencyDF = read_kafka_topic(topic='emergency_data', schema=emergencySchema).alias('emergency')
 
+    q1=streamWriter(input=vehicleDF,
+                checkpointFolder='s3a://spark-streaming-data-smart-city-project/checkpoints/vehicle_data',
+                output='s3a://spark-streaming-data-smart-city-project/data/vehicle_data')
+    q2=streamWriter(input=gpsDF,
+                checkpointFolder='s3a://spark-streaming-data-smart-city-project/checkpoints/gps_data',
+                output='s3a://spark-streaming-data-smart-city-project/data/gps_data')
+    q3=streamWriter(input=trafficDF,
+                checkpointFolder='s3a://spark-streaming-data-smart-city-project/checkpoints/traffic_data',
+                output='s3a://spark-streaming-data-smart-city-project/data/traffic_data')
+    q4=streamWriter(input=weatherDF,
+                checkpointFolder='s3a://spark-streaming-data-smart-city-project/checkpoints/weather_data',
+                output='s3a://spark-streaming-data-smart-city-project/data/weather_data')
+    q5=streamWriter(input=emergencyDF,
+                checkpointFolder='s3a://spark-streaming-data-smart-city-project/checkpoints/emergency_data',
+                output='s3a://spark-streaming-data-smart-city-project/data/emergency_data')
+    q5.awaitTermination()
 
 if __name__ == '__main__':
     main()
